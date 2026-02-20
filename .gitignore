@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Environments
+.env
+.venv
+venv/
+
+# IDE
+.idea
+.vscode
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Sandbox / system artifacts
+/.bash_profile
+/.bashrc
+/.zshrc
+/.zprofile
+/.profile
+/.gitconfig
+/.gitmodules
+/.mcp.json
+/.ripgreprc
+HEAD
+config
+hooks
+objects
+refs
