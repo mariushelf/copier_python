@@ -17,8 +17,8 @@ test: test-unit-tests test-doctest
 test-unit-tests:
 	uv run --no-sources pytest tests
 
-test-doctest:
-	uv run --no-sources pytest src
+test-doctest:  # exit code 5 = no tests collected, which is fine for a fresh project
+	uv run --no-sources pytest --doctest-modules src; rc=$$?; [ $$rc -eq 5 ] && exit 0 || exit $$rc
 
 build:
 	uv build

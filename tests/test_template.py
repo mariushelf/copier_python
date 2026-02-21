@@ -80,6 +80,32 @@ def test_main_executes(project_path):
     )
 
 
+def test_make_lint(project_path):
+    """Verify that `make lint` succeeds on the generated project."""
+    result = subprocess.run(
+        ["make", "lint"],
+        cwd=project_path,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"make lint failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+def test_make_test(project_path):
+    """Verify that `make test` succeeds on the generated project."""
+    result = subprocess.run(
+        ["make", "test"],
+        cwd=project_path,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"make test failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
 def test_pre_commit_passes(project_path):
     """Verify that pre-commit hooks pass on the generated project."""
     subprocess.run(
