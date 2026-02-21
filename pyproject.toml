@@ -1,0 +1,14 @@
+[project]
+name = "copier-python-template"
+version = "0.0.0"
+description = "Copier template for Python projects"
+requires-python = ">=3.12"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "copier",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

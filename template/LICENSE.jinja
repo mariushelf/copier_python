@@ -1,7 +1,7 @@
 {% if license == "MIT" -%}
 MIT License
 
-Copyright (c) {% now 'utc', '%Y' %} {{ author_name }}
+Copyright (c) {{ "%Y" | strftime }} {{ author_name }}
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 {% elif license == "Apache-2.0" -%}
-Copyright {% now 'utc', '%Y' %} {{ author_name }}
+Copyright {{ "%Y" | strftime }} {{ author_name }}
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ Copyright {% now 'utc', '%Y' %} {{ author_name }}
 
 {% elif "GPL-3.0" in license -%}
 {{ project_name }}: {{ project_short_description }}
-Copyright (C) {% now 'utc', '%Y' %} {{ author_name }}
+Copyright (C) {{ "%Y" | strftime }} {{ author_name }}
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
