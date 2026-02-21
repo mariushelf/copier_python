@@ -17,7 +17,9 @@ test: test-unit-tests test-doctest
 test-unit-tests:
 	uv run --no-sources pytest tests
 
-test-doctest:  # exit code 5 = no tests collected, which is fine for a fresh project
+test-doctest:
+	# Run doctests in src/. Tolerates exit code 5 (no tests collected) so that
+	# `make test` passes on a fresh project before any doctests have been added.
 	uv run --no-sources pytest --doctest-modules src; rc=$$?; [ $$rc -eq 5 ] && exit 0 || exit $$rc
 
 build:
