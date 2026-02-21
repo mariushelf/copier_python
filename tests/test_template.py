@@ -78,3 +78,22 @@ def test_main_executes(project_path):
     assert result.returncode == 0, (
         f"main module failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
+
+
+def test_pre_commit_passes(project_path):
+    """Verify that pre-commit hooks pass on the generated project."""
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=project_path,
+        check=True,
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["uvx", "pre-commit", "run", "--all-files"],
+        cwd=project_path,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"pre-commit failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    )
