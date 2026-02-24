@@ -153,7 +153,10 @@ data/**
 poetry.lock
 .isort.cfg
 
-# Sandbox / environment artifacts
+# Claude code artifacts
+**/.claude/settings.local.json
+
+## Sandbox / environment artifacts
 .bash_profile
 .bashrc
 .profile
