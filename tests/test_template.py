@@ -1,11 +1,16 @@
 """Integration tests for the copier template."""
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
 import copier
+
+# A valid Python package / import name: lowercase letters, digits and
+# underscores, not starting with a digit.
+VALID_PACKAGE_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent
 
@@ -186,3 +191,48 @@ def test_make_test_docs(project_path):
     assert result.returncode == 0, (
         f"make test-docs failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
+
+
+def test_default_slug_is_valid_package_name(tmp_path):
+    """The auto-derived project_slug must be a valid Python package name.
+
+    The default project_name ("<author>'s new project") contains an
+    apostrophe, which a blocklist of character replacements would leak into the
+    slug (e.g. ``joe_doe's_new_project``) — an invalid package name that breaks
+    ``uv`` and imports. We render with the apostrophe-bearing defaults and no
+    explicit project_slug, then assert the derived slug and package directory
+    are valid.
+    """
+    dst = tmp_path / "generated"
+    copier.run_copy(
+        src_path=str(TEMPLATE_ROOT),
+        dst_path=str(dst),
+        data={"author_name": "Joe Doe", "author_email": "joe@example.com"},
+        defaults=True,
+        unsafe=True,
+        vcs_ref="HEAD",
+    )
+    package_dirs = [p.name for p in (dst / "src").iterdir() if p.is_dir()]
+    assert package_dirs, "no package directory was rendered under src/"
+    slug = package_dirs[0]
+    assert VALID_PACKAGE_NAME.match(slug), f"invalid package name: {slug!r}"
+    assert slug.isidentifier(), f"slug is not a valid identifier: {slug!r}"
+
+
+def test_invalid_project_slug_is_rejected(tmp_path):
+    """An explicitly supplied invalid project_slug must fail validation.
+
+    The validator guards against bad user input regardless of the default, so a
+    slug containing an apostrophe (or any non-identifier character) must abort
+    rendering rather than producing a broken project.
+    """
+    dst = tmp_path / "generated"
+    with pytest.raises(ValueError, match="project_slug"):
+        copier.run_copy(
+            src_path=str(TEMPLATE_ROOT),
+            dst_path=str(dst),
+            data={**COPIER_DATA, "project_slug": "joe_doe's_project"},
+            defaults=True,
+            unsafe=True,
+            vcs_ref="HEAD",
+        )

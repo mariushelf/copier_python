@@ -94,6 +94,7 @@ type = "github"
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.0",
     "pytest>=8.0",
     "ruff>=0.15",
     "ty>=0.0.17",
@@ -104,4 +105,48 @@ docs = [
     "sphinxcontrib-mermaid>=0.9",
     "sphinx-autobuild>=2024.4",
     "pydata-sphinx-theme>=0.17.1",
+]
+
+[tool.importlinter]
+root_packages = ["{{ project_slug }}"]
+include_external_packages = true
+exclude_type_checking_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Enforce hexagonal layers"
+type = "layers"
+# Outer layers may import inner layers, never the reverse. `main.py` (the
+# composition root / driving adapter) is intentionally NOT a layer here, so it
+# is free to import every layer in order to wire adapters into services.
+layers = [
+    "adapters",
+    "services",
+    "domain",
+]
+containers = ["{{ project_slug }}"]
+
+[[tool.importlinter.contracts]]
+name = "Domain stays free of infrastructure"
+type = "forbidden"
+source_modules = [
+    "{{ project_slug }}.domain",
+]
+# List the infrastructure packages your project depends on so the domain core
+# can never import them. Extend this list as you add dependencies.
+forbidden_modules = [
+    "httpx",
+    "requests",
+    "sqlalchemy",
+]
+
+[[tool.importlinter.contracts]]
+name = "Application services depend only on ports, not infrastructure"
+type = "forbidden"
+source_modules = [
+    "{{ project_slug }}.services",
+]
+forbidden_modules = [
+    "httpx",
+    "requests",
+    "sqlalchemy",
 ]

@@ -1,6 +1,6 @@
 SHELL := /bin/bash
 
-.PHONY: sync clean test test-unit-tests test-doctest build ty ruff type_check lint pre_commit format
+.PHONY: sync clean test test-unit-tests test-doctest build ty ruff import_lint type_check lint pre_commit format
 
 sync:
 	uv sync --all-extras
@@ -32,9 +32,12 @@ ruff:
 	uv run --no-sources ruff format --check --target-version py312 src tests
 	uv run --no-sources ruff check --fix --exit-non-zero-on-fix src tests
 
+import_lint:
+	uv run --no-sources lint-imports
+
 type_check: ty
 
-lint: ruff type_check
+lint: ruff type_check import_lint
 
 pre_commit:
 	pre-commit run --all-files

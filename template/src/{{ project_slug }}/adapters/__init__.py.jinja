@@ -1,0 +1,7 @@
+"""Driven adapters: concrete implementations of domain ports.
+
+Adapters connect the application to the outside world (databases, HTTP APIs,
+LLM providers, ...). They may import ``domain`` (to implement its ports) but
+must not import ``services``, and adapters must not import one another -- they
+meet only through the domain ports and the composition root (``main.py``).
+"""

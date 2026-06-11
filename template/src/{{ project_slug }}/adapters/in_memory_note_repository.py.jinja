@@ -1,0 +1,31 @@
+"""In-memory implementation of the example ``NoteRepository`` port."""
+
+# --- example ---------------------------------------------------------------
+from {{ project_slug }}.domain.errors import NoteNotFoundError
+from {{ project_slug }}.domain.models import Note
+from {{ project_slug }}.domain.ports import NoteRepository
+
+
+class InMemoryNoteRepository(NoteRepository):
+    """A dependency-free ``NoteRepository`` backed by a dict.
+
+    Inherits from the ``NoteRepository`` ABC, which enforces that every abstract
+    method is implemented before the class can be instantiated.
+    """
+
+    def __init__(self) -> None:
+        self._notes: dict[str, Note] = {}
+
+    def save(self, note: Note) -> None:
+        """Store the note, overwriting any existing note with the same id."""
+        self._notes[note.id] = note
+
+    def get(self, note_id: str) -> Note:
+        """Return the stored note, or raise ``NoteNotFoundError``."""
+        try:
+            return self._notes[note_id]
+        except KeyError as exc:
+            raise NoteNotFoundError(note_id) from exc
+
+
+# --- end example -----------------------------------------------------------

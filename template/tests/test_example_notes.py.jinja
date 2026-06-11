@@ -1,0 +1,27 @@
+"""Example tests for the seed hexagonal slice. Delete with the example code."""
+
+# --- example ---------------------------------------------------------------
+import pytest
+
+from {{ project_slug }}.adapters.in_memory_note_repository import (
+    InMemoryNoteRepository,
+)
+from {{ project_slug }}.domain.errors import NoteNotFoundError
+from {{ project_slug }}.services.note_service import NoteService
+
+
+def test_record_and_read_round_trips_a_note():
+    """A recorded note can be read back through the service and adapter."""
+    service = NoteService(InMemoryNoteRepository())
+    service.record("n1", "hello")
+    assert service.read("n1").text == "hello"
+
+
+def test_reading_unknown_note_raises_domain_error():
+    """Reading a missing note surfaces the domain-specific error."""
+    service = NoteService(InMemoryNoteRepository())
+    with pytest.raises(NoteNotFoundError):
+        service.read("missing")
+
+
+# --- end example -----------------------------------------------------------

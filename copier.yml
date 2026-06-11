@@ -37,7 +37,19 @@ project_name:
 project_slug:
   type: str
   help: "Python package name (used for imports, directory name, etc.)"
-  default: "{{ project_name | lower | replace(' ', '_') | replace('-', '_') | replace('.', '_') }}"
+  # Allowlist sanitisation: lowercase, collapse every run of non-alphanumeric
+  # characters (spaces, hyphens, dots, apostrophes, …) into a single
+  # underscore, then trim leading/trailing underscores. A blocklist of
+  # individual replaces would leak characters such as the apostrophe in the
+  # default project_name ("…'s new project").
+  default: "{{ project_name | lower | regex_replace('[^a-z0-9]+', '_') | trim('_') }}"
+  # Reject anything that is not a valid Python package / import name, whether it
+  # comes from the default above or is typed by the user.
+  validator: >-
+    {% if not (project_slug | regex_search('^[a-z_][a-z0-9_]*$')) %}
+    project_slug must be a valid Python package name: lowercase letters, digits
+    and underscores only, and it may not start with a digit.
+    {% endif %}
 
 project_short_description:
   type: str

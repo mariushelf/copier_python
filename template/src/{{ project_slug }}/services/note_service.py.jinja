@@ -1,0 +1,27 @@
+"""Application service exercising the example ``NoteRepository`` port."""
+
+# --- example ---------------------------------------------------------------
+from {{ project_slug }}.domain.models import Note
+from {{ project_slug }}.domain.ports import NoteRepository
+
+
+class NoteService:
+    """A use case that records and retrieves notes via a repository port."""
+
+    def __init__(self, repository: NoteRepository) -> None:
+        # Depend on the port, not a concrete adapter: the service never knows
+        # whether ``repository`` is in-memory, a database, or a test fake.
+        self._repository = repository
+
+    def record(self, note_id: str, text: str) -> Note:
+        """Create and persist a note, returning the stored entity."""
+        note = Note(id=note_id, text=text)
+        self._repository.save(note)
+        return note
+
+    def read(self, note_id: str) -> Note:
+        """Return a previously stored note."""
+        return self._repository.get(note_id)
+
+
+# --- end example -----------------------------------------------------------

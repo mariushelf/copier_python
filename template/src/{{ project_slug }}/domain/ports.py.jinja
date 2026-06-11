@@ -1,0 +1,29 @@
+"""Driven ports: interfaces the application depends on, implemented by adapters.
+
+Ports are declared as abstract base classes (:class:`abc.ABC` with
+:func:`abc.abstractmethod`). Every adapter inherits from the port it implements
+(e.g. ``class InMemoryNoteRepository(NoteRepository): ...``); ``abc`` then
+enforces -- at instantiation time -- that the adapter implements every abstract
+method. The explicit base class also makes the port-adapter relationship
+discoverable in IDEs ("go to definition" jumps to the contract).
+"""
+
+# --- example ---------------------------------------------------------------
+from abc import ABC, abstractmethod
+
+from {{ project_slug }}.domain.models import Note
+
+
+class NoteRepository(ABC):
+    """Persistence port for :class:`Note` entities."""
+
+    @abstractmethod
+    def save(self, note: Note) -> None:
+        """Store ``note``, overwriting any existing note with the same id."""
+
+    @abstractmethod
+    def get(self, note_id: str) -> Note:
+        """Return the note with ``note_id`` or raise ``NoteNotFoundError``."""
+
+
+# --- end example -----------------------------------------------------------
