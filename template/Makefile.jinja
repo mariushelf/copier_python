@@ -33,11 +33,15 @@ ruff:
 	uv run --no-sources ruff check --fix --exit-non-zero-on-fix src tests
 
 import_lint:
+{%- if include_hexagonal %}
 	uv run --no-sources lint-imports
+{%- else %}
+	@echo "import-linter is not configured (no hexagonal scaffolding)."
+{%- endif %}
 
 type_check: ty
 
-lint: ruff type_check import_lint
+lint: ruff type_check{% if include_hexagonal %} import_lint{% endif %}
 
 pre_commit:
 	pre-commit run --all-files

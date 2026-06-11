@@ -94,12 +94,14 @@ type = "github"
 
 [dependency-groups]
 dev = [
+{%- if include_hexagonal %}
     "import-linter>=2.0",
+{%- endif %}
     "pytest>=8.0",
     "ruff>=0.15",
     "ty>=0.0.17",
 ]
-
+{% if include_hexagonal %}
 [tool.importlinter]
 root_packages = ["{{ project_slug }}"]
 include_external_packages = true
@@ -143,3 +145,4 @@ forbidden_modules = [
     "requests",
     "sqlalchemy",
 ]
+{% endif %}
