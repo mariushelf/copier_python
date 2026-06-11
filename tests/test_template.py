@@ -54,6 +54,33 @@ def test_template_renders(project_path):
     assert (project_path / "tests" / "test_test_project.py").is_file()
 
 
+def test_docs_scaffold_renders(project_path):
+    """Verify the documentation scaffold is present and placeholders resolved.
+
+    The docs scaffold must ship complete so a generated project builds its
+    Sphinx site immediately; this checks the key entry points exist and that
+    the templated identity made it into conf.py and index.md.
+    """
+    source = project_path / "docs" / "source"
+    assert (source / "conf.py").is_file()
+    assert (source / "index.md").is_file()
+    assert (source / "reference" / "python-api.md").is_file()
+    # Meta-layer vendored verbatim into contributing/.
+    assert (source / "contributing" / "voice.md").is_file()
+    assert (source / "contributing" / "documentation_guide.md").is_file()
+    # Drift-tripwire harness.
+    assert (project_path / "tests" / "docs" / "test_doc_claims.py").is_file()
+
+    # Copier placeholders must be resolved, not left verbatim.
+    conf = (source / "conf.py").read_text(encoding="utf-8")
+    assert 'PROJECT_NAME = "Test Project"' in conf
+    assert 'DIST_NAME = "test-project"' in conf
+    assert "{{" not in conf
+    index = (source / "index.md").read_text(encoding="utf-8")
+    assert index.startswith("# Test Project")
+    assert "{{" not in index
+
+
 def test_generated_tests_pass(project_path):
     """Run pytest in the generated project and verify it passes."""
     result = subprocess.run(
@@ -122,4 +149,40 @@ def test_pre_commit_passes(project_path):
     )
     assert result.returncode == 0, (
         f"pre-commit failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+def test_make_docs_strict(project_path):
+    """Verify `make docs-strict` builds the docs with zero warnings.
+
+    The scaffold is contracted to pass `sphinx-build -W` immediately after
+    generation, before any page is authored — broken cross-references,
+    orphaned pages, or autodoc surprises must fail here, not silently ship.
+    """
+    result = subprocess.run(
+        ["make", "docs-strict"],
+        cwd=project_path,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"make docs-strict failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
+    )
+
+
+def test_make_test_docs(project_path):
+    """Verify `make test-docs` passes on the freshly generated project.
+
+    The drift-tripwire suite in tests/docs/ must be green out of the box; its
+    structural checks (every page reachable from a toctree) guard the scaffold
+    itself, independent of any project-specific claims added later.
+    """
+    result = subprocess.run(
+        ["make", "test-docs"],
+        cwd=project_path,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, (
+        f"make test-docs failed:\nstdout: {result.stdout}\nstderr: {result.stderr}"
     )
