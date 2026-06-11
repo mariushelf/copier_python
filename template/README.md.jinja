@@ -47,6 +47,31 @@ make test
 make lint
 ```
 
+## Documentation
+
+Documentation is a [Sphinx](https://www.sphinx-doc.org/) + [MyST](https://myst-parser.readthedocs.io/)
+site. Only `docs/source/` is rendered; it is organised by audience (orientation /
+users / operators / maintainers) following the [Diátaxis](https://diataxis.fr/)
+model. Author meta-rules live under `docs/source/contributing/`
+(`documentation_guide.md`, `voice.md`, `writing_documentation.md`).
+
+```bash
+make docs          # build HTML into docs/build/html
+make docs-strict   # build with -W (warnings are errors) — use this in CI
+make docs-live     # live-reloading preview server
+make test-docs     # run the docs drift-tripwire tests in tests/docs/
+```
+
+`tests/docs/` pins documented facts (exported symbols, defaults, the toctree
+structure) to the source so that code/doc drift fails the build. Extend it as
+you document the project.
+
+The scaffolding is maintained with the
+[`update-docs` and `check-docs`](https://github.com/mariushelf/claude-swe-tools)
+skills: `check-docs` audits the docs against the code and emits a report;
+`update-docs` repairs the gaps. Run `check-docs` periodically (or in CI) and
+feed its report to `update-docs` to keep the docs current.
+
 ## Releasing
 
 Releases are managed via [python-semantic-release](https://python-semantic-release.readthedocs.io/).
