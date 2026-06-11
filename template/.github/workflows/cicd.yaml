@@ -32,7 +32,7 @@ jobs:
       - name: ty
         run: make ty
       - name: import-linter
-        run: uv run --no-sources lint-imports
+        run: make import_lint
   test:
     runs-on: ubuntu-latest
     strategy:

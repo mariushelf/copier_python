@@ -71,3 +71,11 @@ license:
     - GPL-3.0-or-later
     - LicenseRef-Proprietary
   default: MIT
+
+include_hexagonal:
+  type: bool
+  help: >-
+    Scaffold a hexagonal (ports-and-adapters) architecture? Adds domain/services/
+    adapters layers with an example slice, plus import-linter contracts that
+    enforce the layer boundaries.
+  default: true

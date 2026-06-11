@@ -3,6 +3,7 @@
 import re
 import subprocess
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -26,14 +27,19 @@ COPIER_DATA = {
 }
 
 
-@pytest.fixture(scope="session")
-def project_path(tmp_path_factory):
-    """Generate a project from the template and install its dependencies."""
-    dst = tmp_path_factory.mktemp("generated")
+@pytest.fixture(scope="session", params=[True, False], ids=["hexagonal", "flat"])
+def project(tmp_path_factory, request):
+    """Generate a project from the template and install its dependencies.
+
+    Parametrised over the ``include_hexagonal`` answer so that both the
+    hexagonal scaffolding and the plain layout are exercised end to end.
+    """
+    include_hexagonal = request.param
+    dst = tmp_path_factory.mktemp("hex" if include_hexagonal else "flat")
     copier.run_copy(
         src_path=str(TEMPLATE_ROOT),
         dst_path=str(dst),
-        data=COPIER_DATA,
+        data={**COPIER_DATA, "include_hexagonal": include_hexagonal},
         defaults=True,
         unsafe=True,
         vcs_ref="HEAD",
@@ -44,29 +50,34 @@ def project_path(tmp_path_factory):
         check=True,
         capture_output=True,
     )
-    return dst
+    return SimpleNamespace(path=dst, hexagonal=include_hexagonal)
 
 
-def test_template_renders(project_path):
-    """Verify that key files exist after rendering."""
-    assert (project_path / "pyproject.toml").is_file()
-    assert (project_path / "README.md").is_file()
-    assert (project_path / "LICENSE").is_file()
-    assert (project_path / "Makefile").is_file()
-    assert (project_path / "src" / "test_project").is_dir()
-    assert (project_path / "src" / "test_project" / "__init__.py").is_file()
-    assert (project_path / "src" / "test_project" / "main.py").is_file()
-    assert (project_path / "tests" / "test_test_project.py").is_file()
+def test_template_renders(project):
+    """Verify key files exist, and that hexagonal files appear only when asked."""
+    assert (project.path / "pyproject.toml").is_file()
+    assert (project.path / "README.md").is_file()
+    assert (project.path / "LICENSE").is_file()
+    assert (project.path / "Makefile").is_file()
+    assert (project.path / "src" / "test_project").is_dir()
+    assert (project.path / "src" / "test_project" / "__init__.py").is_file()
+    assert (project.path / "src" / "test_project" / "main.py").is_file()
+    assert (project.path / "tests" / "test_test_project.py").is_file()
+
+    domain = project.path / "src" / "test_project" / "domain"
+    example_test = project.path / "tests" / "test_example_notes.py"
+    assert domain.is_dir() == project.hexagonal
+    assert example_test.is_file() == project.hexagonal
 
 
-def test_docs_scaffold_renders(project_path):
+def test_docs_scaffold_renders(project):
     """Verify the documentation scaffold is present and placeholders resolved.
 
     The docs scaffold must ship complete so a generated project builds its
     Sphinx site immediately; this checks the key entry points exist and that
     the templated identity made it into conf.py and index.md.
     """
-    source = project_path / "docs" / "source"
+    source = project.path / "docs" / "source"
     assert (source / "conf.py").is_file()
     assert (source / "index.md").is_file()
     assert (source / "reference" / "python-api.md").is_file()
@@ -74,7 +85,7 @@ def test_docs_scaffold_renders(project_path):
     assert (source / "contributing" / "voice.md").is_file()
     assert (source / "contributing" / "documentation_guide.md").is_file()
     # Drift-tripwire harness.
-    assert (project_path / "tests" / "docs" / "test_doc_claims.py").is_file()
+    assert (project.path / "tests" / "docs" / "test_doc_claims.py").is_file()
 
     # Copier placeholders must be resolved, not left verbatim.
     conf = (source / "conf.py").read_text(encoding="utf-8")
@@ -86,11 +97,11 @@ def test_docs_scaffold_renders(project_path):
     assert "{{" not in index
 
 
-def test_generated_tests_pass(project_path):
+def test_generated_tests_pass(project):
     """Run pytest in the generated project and verify it passes."""
     result = subprocess.run(
         ["uv", "run", "pytest"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )
@@ -99,11 +110,11 @@ def test_generated_tests_pass(project_path):
     )
 
 
-def test_main_executes(project_path):
+def test_main_executes(project):
     """Run the generated project's main module."""
     result = subprocess.run(
         ["uv", "run", "python", "-m", "test_project.main"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )
@@ -112,11 +123,11 @@ def test_main_executes(project_path):
     )
 
 
-def test_make_lint(project_path):
+def test_make_lint(project):
     """Verify that `make lint` succeeds on the generated project."""
     result = subprocess.run(
         ["make", "lint"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )
@@ -125,11 +136,11 @@ def test_make_lint(project_path):
     )
 
 
-def test_make_test(project_path):
+def test_make_test(project):
     """Verify that `make test` succeeds on the generated project."""
     result = subprocess.run(
         ["make", "test"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )
@@ -138,17 +149,17 @@ def test_make_test(project_path):
     )
 
 
-def test_pre_commit_passes(project_path):
+def test_pre_commit_passes(project):
     """Verify that pre-commit hooks pass on the generated project."""
     subprocess.run(
         ["git", "add", "."],
-        cwd=project_path,
+        cwd=project.path,
         check=True,
         capture_output=True,
     )
     result = subprocess.run(
         ["uvx", "pre-commit", "run", "--all-files"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )
@@ -157,7 +168,7 @@ def test_pre_commit_passes(project_path):
     )
 
 
-def test_make_docs_strict(project_path):
+def test_make_docs_strict(project):
     """Verify `make docs-strict` builds the docs with zero warnings.
 
     The scaffold is contracted to pass `sphinx-build -W` immediately after
@@ -166,7 +177,7 @@ def test_make_docs_strict(project_path):
     """
     result = subprocess.run(
         ["make", "docs-strict"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )
@@ -175,7 +186,7 @@ def test_make_docs_strict(project_path):
     )
 
 
-def test_make_test_docs(project_path):
+def test_make_test_docs(project):
     """Verify `make test-docs` passes on the freshly generated project.
 
     The drift-tripwire suite in tests/docs/ must be green out of the box; its
@@ -184,7 +195,7 @@ def test_make_test_docs(project_path):
     """
     result = subprocess.run(
         ["make", "test-docs"],
-        cwd=project_path,
+        cwd=project.path,
         capture_output=True,
         text=True,
     )

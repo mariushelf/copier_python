@@ -20,7 +20,7 @@ Use semantic commit messages:
 - `chore:` maintenance tasks, dependency updates, CI config, cleanup of things that work but are unnecessary
 
 Do NOT add "Co-Authored-By" or any AI attribution trailers to commit messages.
-
+{% if include_hexagonal %}
 ## Architecture
 
 This project follows a hexagonal (ports-and-adapters) architecture. The
@@ -60,9 +60,13 @@ The `domain`, `services`, and `adapters` packages ship with a small,
 clearly-marked example slice (a `Note` entity, a `NoteRepository` port, an
 in-memory adapter, and a `NoteService`). Search for `# --- example` and delete
 those blocks once you start modelling your own domain.
-
+{% endif %}
 ## Testing & Linting
 
 - `make test` runs the test suite.
+{%- if include_hexagonal %}
 - `make lint` runs ruff, the `ty` type checker, and the `import-linter`
   architecture contracts.
+{%- else %}
+- `make lint` runs ruff and the `ty` type checker.
+{%- endif %}

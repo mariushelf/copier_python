@@ -22,8 +22,10 @@ repos:
     language: system
     files: ^src/.*\.py$
     exclude: ^src/legacy/.*\.py$
+{%- if include_hexagonal %}
   - id: lint_imports
     name: lint imports
     entry: uv run lint-imports
     language: system
     pass_filenames: false
+{%- endif %}
