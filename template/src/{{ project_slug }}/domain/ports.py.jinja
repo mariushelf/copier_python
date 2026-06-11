@@ -1,0 +1,28 @@
+"""Driven ports: interfaces the application depends on, implemented by adapters.
+
+Ports are declared as :class:`typing.Protocol` classes. Although Protocols
+support structural typing, every adapter should *explicitly* inherit from the
+port it implements (e.g. ``class InMemoryNoteRepository(NoteRepository): ...``).
+The explicit base class makes the port-adapter relationship discoverable in
+IDEs ("go to definition" jumps to the contract) and signals intent to readers.
+"""
+
+# --- example ---------------------------------------------------------------
+from typing import Protocol
+
+from {{ project_slug }}.domain.models import Note
+
+
+class NoteRepository(Protocol):
+    """Persistence port for :class:`Note` entities."""
+
+    def save(self, note: Note) -> None:
+        """Store ``note``, overwriting any existing note with the same id."""
+        ...
+
+    def get(self, note_id: str) -> Note:
+        """Return the note with ``note_id`` or raise ``NoteNotFoundError``."""
+        ...
+
+
+# --- end example -----------------------------------------------------------

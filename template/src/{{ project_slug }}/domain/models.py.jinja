@@ -1,0 +1,18 @@
+"""Domain entities and value objects."""
+
+# --- example ---------------------------------------------------------------
+# Everything marked "example" across the domain/services/adapters packages (and
+# the matching tests) is a seed that demonstrates the hexagonal pattern end to
+# end. Delete it once you start modelling your own domain.
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Note:
+    """An immutable note entity, identified by ``id``."""
+
+    id: str
+    text: str
+
+
+# --- end example -----------------------------------------------------------

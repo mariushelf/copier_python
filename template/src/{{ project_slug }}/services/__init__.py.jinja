@@ -1,0 +1,7 @@
+"""Application services / use cases.
+
+Orchestrates domain objects to fulfil application behaviour. Depends only on
+``domain`` (entities and ports) -- never on ``adapters`` or infrastructure.
+Inject adapters through port-typed parameters so use cases stay testable with
+in-memory fakes.
+"""

@@ -31,6 +31,8 @@ jobs:
         run: uv run --no-sources ruff check src tests
       - name: ty
         run: make ty
+      - name: import-linter
+        run: uv run --no-sources lint-imports
   test:
     runs-on: ubuntu-latest
     strategy:

@@ -1,0 +1,13 @@
+"""Domain-specific error types."""
+
+
+class DomainError(Exception):
+    """Base class for all errors raised by the domain layer."""
+
+
+# --- example ---------------------------------------------------------------
+class NoteNotFoundError(DomainError):
+    """Raised when a requested note does not exist."""
+
+
+# --- end example -----------------------------------------------------------
