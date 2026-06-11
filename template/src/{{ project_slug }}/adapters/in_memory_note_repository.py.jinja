@@ -9,8 +9,8 @@ from {{ project_slug }}.domain.ports import NoteRepository
 class InMemoryNoteRepository(NoteRepository):
     """A dependency-free ``NoteRepository`` backed by a dict.
 
-    Explicitly inherits from ``NoteRepository`` so the port-adapter relationship
-    is discoverable; the ``Protocol`` would also match structurally without it.
+    Inherits from the ``NoteRepository`` ABC, which enforces that every abstract
+    method is implemented before the class can be instantiated.
     """
 
     def __init__(self) -> None:

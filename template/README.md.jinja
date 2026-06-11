@@ -9,6 +9,14 @@
 Original repository: [https://github.com/{{ github_username }}/{{ project_slug }}](https://github.com/{{ github_username }}/{{ project_slug }})
 
 
+# Architecture
+
+This project follows a [hexagonal (ports-and-adapters) architecture](https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)),
+organised into `domain`, `services`, and `adapters` layers. The layer
+boundaries are enforced by [import-linter](https://import-linter.readthedocs.io/);
+run `make lint` to check them. See [`AGENTS.md`](AGENTS.md) for the full rules.
+
+
 # Installation
 
 ```bash

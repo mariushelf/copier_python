@@ -32,16 +32,16 @@ reverse.
 - Driven adapters (databases, HTTP clients, external APIs, ...) sit behind ports
   declared in `{{ project_slug }}.domain.ports`, so implementations can be
   swapped without touching the core.
-- **Every class that implements a port must explicitly inherit from it** — this
-  applies to production adapters *and* test doubles (e.g.
+- Ports are declared as abstract base classes (`abc.ABC` with
+  `@abstractmethod`). **Every class that implements a port inherits from it** —
+  this applies to production adapters *and* test doubles (e.g.
   `class InMemoryNoteRepository(NoteRepository):`,
-  `class FakeNoteRepository(NoteRepository):`). Although Python `Protocol`s
-  support structural typing without inheritance, the explicit base class makes
-  the port↔adapter relationship discoverable in IDEs ("go to definition" jumps
-  to the contract) and signals intent to readers. Skipping the inheritance is
-  reserved for genuinely ad-hoc cases (e.g. a one-line
-  `unittest.mock.MagicMock(spec=NoteRepository)`, which enforces conformance via
-  `spec=`) and should be the exception, not the default.
+  `class FakeNoteRepository(NoteRepository):`). The ABC enforces the contract at
+  instantiation time (a subclass that misses an abstract method cannot be
+  instantiated) and makes the port↔adapter relationship discoverable in IDEs
+  ("go to definition" jumps to the contract). The one common exception is a
+  one-line `unittest.mock.MagicMock(spec=NoteRepository)`, which enforces
+  conformance via `spec=`.
 
 Layer rules are enforced by `import-linter` contracts in `pyproject.toml`
 (`make lint` runs them). The package layout is:
