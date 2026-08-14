@@ -2,6 +2,7 @@ name: CI/CD
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_call:
 
@@ -67,3 +68,25 @@ jobs:
         run: make docs-strict
       - name: Run docs drift tests
         run: make test-docs
+  # Single aggregate check to require in the branch ruleset. It depends on
+  # every other CI job and fails if any of them failed or was cancelled.
+  # Requiring this one check (instead of each job or matrix leg) keeps the
+  # ruleset stable when matrix dimensions change, and means a conditionally
+  # skipped dependency never leaves a required check stuck "waiting" —
+  # `skipped` is treated as acceptable here.
+  ci-gate:
+    if: always()
+    needs: [lint, test, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no required job failed
+        run: |
+          results="${{ join(needs.*.result, ' ') }}"
+          echo "Upstream job results: ${results}"
+          for r in ${results}; do
+            if [ "${r}" = "failure" ] || [ "${r}" = "cancelled" ]; then
+              echo "::error::A required CI job did not pass (result: ${r})."
+              exit 1
+            fi
+          done
+          echo "All required CI jobs passed (or were acceptably skipped)."
