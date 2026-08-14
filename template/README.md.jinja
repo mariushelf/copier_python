@@ -47,6 +47,10 @@ make test
 make lint
 ```
 
+## Branch protection
+
+`ci-gate` is the single status check to require in the branch ruleset: it depends on every other CI job, so the ruleset stays correct as jobs and matrix legs change.
+
 ## Documentation
 
 Documentation is a [Sphinx](https://www.sphinx-doc.org/) + [MyST](https://myst-parser.readthedocs.io/)

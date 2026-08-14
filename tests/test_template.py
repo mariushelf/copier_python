@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
 import copier
 
@@ -14,6 +15,28 @@ import copier
 VALID_PACKAGE_NAME = re.compile(r"^[a-z_][a-z0-9_]*$")
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent
+
+# Both CI workflows carry the aggregate `ci-gate` job. They can be parsed
+# straight from disk: `_templates_suffix: .jinja` means only `.jinja` files are
+# rendered, so the template's cicd.yaml is copied verbatim (which is also why
+# its `${{ matrix.python-version }}` survives generation).
+CI_WORKFLOWS = [
+    TEMPLATE_ROOT / ".github" / "workflows" / "ci.yaml",
+    TEMPLATE_ROOT / "template" / ".github" / "workflows" / "cicd.yaml",
+]
+
+
+def _load_workflow(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _triggers(workflow: dict) -> dict:
+    """Return a workflow's `on:` block.
+
+    PyYAML follows YAML 1.1, where a bare ``on`` key is the boolean ``True``,
+    so the block cannot simply be looked up by its name.
+    """
+    return workflow[True] if True in workflow else workflow["on"]
 
 COPIER_DATA = {
     "author_name": "Test Author",
@@ -314,6 +337,42 @@ def test_default_slug_is_valid_package_name(tmp_path):
     slug = package_dirs[0]
     assert VALID_PACKAGE_NAME.match(slug), f"invalid package name: {slug!r}"
     assert slug.isidentifier(), f"slug is not a valid identifier: {slug!r}"
+
+
+@pytest.mark.parametrize("workflow_path", CI_WORKFLOWS, ids=lambda p: p.name)
+def test_ci_gate_covers_every_job(workflow_path):
+    """The `ci-gate` job must depend on every other job in its workflow.
+
+    A branch ruleset names required checks literally, so it requires only
+    `ci-gate` and the workflow itself carries the "everything must be green"
+    list. That indirection is only safe while `needs:` stays complete — add a
+    job (or a whole matrix) and forget the list, and the gate goes green while
+    the new job burns. This test is the tripwire for exactly that drift.
+    """
+    workflow = _load_workflow(workflow_path)
+    jobs = workflow["jobs"]
+
+    assert "ci-gate" in jobs, f"{workflow_path.name} has no ci-gate job"
+    gate = jobs["ci-gate"]
+
+    # Without `if: always()` the gate is skipped when a dependency fails, and a
+    # skipped required check leaves the PR waiting forever instead of failing.
+    assert gate.get("if") == "always()"
+    assert set(gate["needs"]) == set(jobs) - {"ci-gate"}
+
+
+@pytest.mark.parametrize("workflow_path", CI_WORKFLOWS, ids=lambda p: p.name)
+def test_ci_workflow_triggers(workflow_path):
+    """Push runs only on main; pull_request stays so fork PRs still get a gate.
+
+    Firing on every push *and* on pull_request produces two identical `ci-gate`
+    check runs for a same-repo PR branch. Dropping `pull_request:` instead
+    would mean fork PRs never run CI, so the required check never appears and
+    those PRs cannot be merged.
+    """
+    triggers = _triggers(_load_workflow(workflow_path))
+    assert triggers["push"] == {"branches": ["main"]}
+    assert "pull_request" in triggers
 
 
 def test_invalid_project_slug_is_rejected(tmp_path):
