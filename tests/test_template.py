@@ -18,11 +18,11 @@ TEMPLATE_ROOT = Path(__file__).resolve().parent.parent
 
 # Both CI workflows carry the aggregate `ci-gate` job. They can be parsed
 # straight from disk: `_templates_suffix: .jinja` means only `.jinja` files are
-# rendered, so the template's cicd.yaml is copied verbatim (which is also why
+# rendered, so the template's ci.yaml is copied verbatim (which is also why
 # its `${{ matrix.python-version }}` survives generation).
 CI_WORKFLOWS = [
     TEMPLATE_ROOT / ".github" / "workflows" / "ci.yaml",
-    TEMPLATE_ROOT / "template" / ".github" / "workflows" / "cicd.yaml",
+    TEMPLATE_ROOT / "template" / ".github" / "workflows" / "ci.yaml",
 ]
 
 
@@ -310,7 +310,7 @@ def test_generated_release_keeps_local_workflow_ref_unpinned(project):
         for path, _, ref, _ in _uses_refs(project.path / ".github" / "workflows")
         if ref.startswith("./")
     ]
-    assert local == [("release.yaml", "./.github/workflows/cicd.yaml")]
+    assert local == [("release.yaml", "./.github/workflows/ci.yaml")]
 
 
 def test_default_slug_is_valid_package_name(tmp_path):
