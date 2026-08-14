@@ -25,7 +25,7 @@ on:
 
 jobs:
   ci:
-    uses: ./.github/workflows/cicd.yaml
+    uses: ./.github/workflows/ci.yaml
 
   release:
     needs: ci
