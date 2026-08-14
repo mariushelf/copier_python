@@ -204,6 +204,88 @@ def test_make_test_docs(project):
     )
 
 
+# A `uses:` step reference, capturing the ref and any trailing comment.
+USES_LINE = re.compile(r"^\s*(?:-\s*)?uses:\s*(?P<ref>\S+)\s*(?:#\s*(?P<comment>.*))?$")
+# A third-party action pinned to a full 40-character commit SHA.
+SHA_PINNED_REF = re.compile(r"^[^@]+@[0-9a-f]{40}$")
+# The version the pinned SHA corresponds to, e.g. "v7.0.1".
+VERSION_COMMENT = re.compile(r"^v\d+\.\d+\.\d+")
+
+
+def _uses_refs(workflow_dir):
+    """Yield ``(path, lineno, ref, comment)`` for every ``uses:`` in a directory."""
+    for path in sorted(Path(workflow_dir).glob("*.yaml")):
+        for lineno, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            match = USES_LINE.match(line)
+            if match:
+                yield path, lineno, match["ref"], match["comment"]
+
+
+def assert_actions_are_sha_pinned(workflow_dir):
+    """Assert every third-party action in ``workflow_dir`` is pinned to a commit SHA.
+
+    A mutable ref (``@v4``, or worse a branch like ``@release/v1``) resolves at run
+    time to whatever upstream points at today, so anyone who can move that tag runs
+    arbitrary code in our CI with our tokens. Only an immutable 40-hex commit SHA
+    closes that hole. Local reusable workflows (``./.github/...``) are exempt: they
+    live in the same repo and are not a supply-chain surface.
+    """
+    refs = list(_uses_refs(workflow_dir))
+    assert refs, f"no `uses:` steps found under {workflow_dir}"
+
+    unpinned = [
+        f"{path.name}:{lineno}: {ref}"
+        for path, lineno, ref, _ in refs
+        if not ref.startswith("./") and not SHA_PINNED_REF.match(ref)
+    ]
+    assert not unpinned, "actions not pinned to a 40-hex commit SHA:\n" + "\n".join(
+        unpinned
+    )
+
+    # The trailing version comment is what makes the pin reviewable and tells a
+    # future updater which release the opaque SHA actually is.
+    uncommented = [
+        f"{path.name}:{lineno}: {ref}"
+        for path, lineno, ref, comment in refs
+        if not ref.startswith("./")
+        and not (comment and VERSION_COMMENT.match(comment.strip()))
+    ]
+    assert not uncommented, (
+        "pinned actions missing a `# vX.Y.Z` version comment:\n" + "\n".join(uncommented)
+    )
+
+
+def test_own_workflows_pin_actions_to_sha():
+    """This repo's own CI must pin its actions, not just the template's."""
+    assert_actions_are_sha_pinned(TEMPLATE_ROOT / ".github" / "workflows")
+
+
+def test_generated_workflows_pin_actions_to_sha(project):
+    """Every generated project inherits the template's refs, so they must be pinned.
+
+    Asserted against the *rendered* project rather than the template source, so the
+    pins are proven to survive copier rendering into every downstream repo.
+    """
+    assert_actions_are_sha_pinned(project.path / ".github" / "workflows")
+
+
+def test_generated_release_keeps_local_workflow_ref_unpinned(project):
+    """The local reusable-workflow ref must stay a path, not become a SHA.
+
+    ``uses: ./.github/workflows/...`` refers to a file inside the generated repo
+    itself. A SHA there would pin the project to one of its own commits that does
+    not exist yet — so this ref is deliberately excluded from the pinning sweep.
+    """
+    local = [
+        (path.name, ref)
+        for path, _, ref, _ in _uses_refs(project.path / ".github" / "workflows")
+        if ref.startswith("./")
+    ]
+    assert local == [("release.yaml", "./.github/workflows/cicd.yaml")]
+
+
 def test_default_slug_is_valid_package_name(tmp_path):
     """The auto-derived project_slug must be a valid Python package name.
 
