@@ -63,6 +63,10 @@ def test_template_renders(project):
     assert (project.path / "src" / "test_project" / "__init__.py").is_file()
     assert (project.path / "src" / "test_project" / "main.py").is_file()
     assert (project.path / "tests" / "test_test_project.py").is_file()
+    assert (project.path / "AGENTS.md").is_file()
+    assert (project.path / "CLAUDE.md").is_file()
+    # AGENTS.md is rendered from a .jinja source, so placeholders must resolve.
+    assert "{{" not in (project.path / "AGENTS.md").read_text(encoding="utf-8")
 
     domain = project.path / "src" / "test_project" / "domain"
     example_test = project.path / "tests" / "test_example_notes.py"
