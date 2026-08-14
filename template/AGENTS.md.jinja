@@ -70,3 +70,40 @@ those blocks once you start modelling your own domain.
 {%- else %}
 - `make lint` runs ruff and the `ty` type checker.
 {%- endif %}
+
+## Documentation and Comment Style
+
+Brevity is not tidiness — it is what gets the text read. A docstring, comment,
+or page nobody reads still has to be maintained, so it is worse than none.
+
+Docstring *presence* is enforced by ruff's `D` rules (numpy convention) in
+`pyproject.toml`. This section bounds their *length*.
+
+The unit of judgement is the *added fact*: after the summary line, every line
+must tell the reader something they cannot get from the name, the signature,
+the type hints, or the code itself.
+
+Earns more than a summary line:
+
+- a contract the signature doesn't show — preconditions, invariants, what it
+  raises
+- units, bounds, or formats a type can't carry (`timeout: float` — seconds or
+  milliseconds?)
+- caller-visible behaviour that would surprise — mutation, ordering,
+  idempotency, blocking, retries, cost (a network round-trip, an LLM call)
+- a pointer to the *why* when it isn't obvious (link the issue or ADR, don't
+  restate it)
+
+Does not:
+
+- restating the signature, or a numpy `Parameters`/`Returns` section where the
+  name and type already say it
+- narrating the implementation step by step — that's the code
+- history ("previously…", "refactored to…") — that's git
+- examples for a function whose use is obvious from its name
+
+The same rule governs prose: the README covers what a reader needs to install,
+run, and maintain the project; implementation detail belongs in the code.
+Prefer a list, table, or short code example over paragraphs. When editing an
+existing docstring, comment, or page, it must not get longer unless behaviour
+was added.
