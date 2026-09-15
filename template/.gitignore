@@ -171,3 +171,5 @@ config
 /hooks
 /objects
 /refs
+
+branch_protection_rules.json

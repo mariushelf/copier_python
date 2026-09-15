@@ -19,6 +19,7 @@ _tasks:
     when: "{{ push_to_github }}"
   - command: "gh api --method PUT -H \"Accept: application/vnd.github+json\" repos/{{ github_username }}/{{ project_github_name }}/branches/main/protection --input branch_protection_rules.json"
     when: "{{ push_to_github }}"
+  - command: rm branch_protection_rules.json
 
 # Questions
 
