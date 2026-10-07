@@ -25,8 +25,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/{{ github_username }}/{{ project_slug }}"
-Repository = "https://github.com/{{ github_username }}/{{ project_slug }}"
+Homepage = "https://github.com/{{ github_username }}/{{ project_slug | replace('_', '-') }}"
+Repository = "https://github.com/{{ github_username }}/{{ project_slug | replace('_', '-') }}"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/{{ project_slug }}"]
