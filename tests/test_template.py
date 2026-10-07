@@ -2,6 +2,7 @@
 
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -337,6 +338,51 @@ def test_default_slug_is_valid_package_name(tmp_path):
     slug = package_dirs[0]
     assert VALID_PACKAGE_NAME.match(slug), f"invalid package name: {slug!r}"
     assert slug.isidentifier(), f"slug is not a valid identifier: {slug!r}"
+
+
+@pytest.mark.parametrize("include_hexagonal", [True, False], ids=["hexagonal", "flat"])
+def test_github_urls_use_hyphenated_repo_name(tmp_path, include_hexagonal):
+    """Generated GitHub URLs name the repository with hyphens, not underscores.
+
+    GitHub repositories are conventionally hyphenated while the Python package
+    needs underscores. Building the URL from ``project_slug`` unchanged broke
+    the CI badge and project URLs for e.g. ``auto-shopper``. We render without
+    ``uv sync`` (which would add ``.venv/`` metadata that repeats the URLs) and
+    check pyproject.toml, README.md, and every other rendered file.
+    """
+    dst = tmp_path / "generated"
+    copier.run_copy(
+        src_path=str(TEMPLATE_ROOT),
+        dst_path=str(dst),
+        data={**COPIER_DATA, "include_hexagonal": include_hexagonal},
+        defaults=True,
+        unsafe=True,
+        vcs_ref="HEAD",
+    )
+    repo_url = "https://github.com/testuser/test-project"
+
+    pyproject = tomllib.loads((dst / "pyproject.toml").read_text(encoding="utf-8"))
+    assert pyproject["project"]["urls"] == {
+        "Homepage": repo_url,
+        "Repository": repo_url,
+    }
+
+    readme = (dst / "README.md").read_text(encoding="utf-8")
+    repos = re.findall(r"github\.com/testuser/([^/)\]\s\"]+)", readme)
+    assert repos, "README.md has no github.com/testuser URL"
+    assert set(repos) == {"test-project"}, f"README repo names: {repos}"
+
+    offenders = []
+    for path in dst.rglob("*"):
+        if not path.is_file() or ".git" in path.relative_to(dst).parts[:1]:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if "github.com/testuser/test_project" in text:
+            offenders.append(str(path.relative_to(dst)))
+    assert not offenders, f"underscored repo URL found in: {offenders}"
 
 
 @pytest.mark.parametrize("workflow_path", CI_WORKFLOWS, ids=lambda p: p.name)
