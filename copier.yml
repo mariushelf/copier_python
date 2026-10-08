@@ -51,6 +51,14 @@ project_slug:
     and underscores only, and it may not start with a digit.
     {% endif %}
 
+# Computed, not asked: `when: false` hides it from the interview and keeps it
+# out of .copier-answers.yml. GitHub repositories are named with hyphens, while
+# the Python package name (project_slug) needs underscores.
+repo_name:
+  type: str
+  default: "{{ project_slug | replace('_', '-') }}"
+  when: false
+
 project_short_description:
   type: str
   help: A short description of the project
