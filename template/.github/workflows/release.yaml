@@ -23,6 +23,10 @@ on:
         type: string
         default: "rc"
 
+# Least privilege: read-only by default; the release job widens its own token.
+permissions:
+  contents: read
+
 jobs:
   ci:
     uses: ./.github/workflows/ci.yaml
