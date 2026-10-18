@@ -10,6 +10,7 @@ _exclude:
 
 _tasks:
   - "git init"
+  - "uv lock"
   - "git checkout -b main"
 
 # Questions

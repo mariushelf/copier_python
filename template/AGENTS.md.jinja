@@ -80,8 +80,11 @@ has its own graph, and it is not committed.
 - Query it before broad searches: `graphify query "<question>"`,
   `graphify explain "<node>"`, `graphify path "A" "B"`, and
   `graphify-out/GRAPH_REPORT.md` for an overview.
-- `pre-commit install` installs all hook types, including these.
-- If the graph is missing, run `uv run graphify update .`.
+- `uv run pre-commit install --allow-missing-config` installs all hook types,
+  including these. The flag keeps checkouts of old commits without a config
+  working.
+- If the graph is missing, run `sh scripts/graphify-update.sh`. Do not call
+  `graphify update .` directly: it overwrites the global graphify skill files.
 
 ## Documentation and Comment Style
 

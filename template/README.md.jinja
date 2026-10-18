@@ -32,8 +32,11 @@ pip install {{ project_slug | replace('_', '-') }}
 
 ```bash
 uv sync
-uv run pre-commit install  # also installs the post-* hooks that keep graphify-out/ current
+uv run pre-commit install --allow-missing-config
 ```
+
+The hooks keep a local code graph in `graphify-out/` current after commit,
+checkout, merge and rebase. They need a POSIX `sh` (on Windows: Git Bash).
 
 ## Running tests
 
