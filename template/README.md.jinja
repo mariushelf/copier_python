@@ -51,6 +51,10 @@ make lint
 
 `ci-gate` is the single status check to require in the branch ruleset: it depends on every other CI job, so the ruleset stays correct as jobs and matrix legs change.
 
+## Dependency updates
+
+Dependabot opens weekly pull requests for the `uv` dependencies and the GitHub Actions. It waits 7 days after a release before proposing it; security updates are not delayed.
+
 ## Documentation
 
 Documentation is a [Sphinx](https://www.sphinx-doc.org/) + [MyST](https://myst-parser.readthedocs.io/)
