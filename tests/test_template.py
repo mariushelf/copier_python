@@ -618,15 +618,12 @@ def test_graphify_script_does_not_steal_live_lock(project, tmp_path):
         holder.wait()
 
 
-def test_generation_survives_without_uv(tmp_path):
+def test_generation_survives_failing_uv_lock(tmp_path):
     """The best-effort `uv lock` task must not abort project generation."""
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    for tool in ("git", "sh"):
-        (bin_dir / tool).symlink_to(shutil.which(tool))
+    env = _fake_uv(tmp_path / "bin", "echo offline >&2; exit 2")
     dst = tmp_path / "proj"
     # copier runs tasks with plumbum's environment, not os.environ.
-    with plumbum.local.env(PATH=str(bin_dir)):
+    with plumbum.local.env(PATH=env["PATH"]):
         copier.run_copy(
             src_path=str(TEMPLATE_ROOT),
             dst_path=str(dst),
