@@ -435,9 +435,10 @@ def _assert_dependabot_config(path: Path, actions_dirs=("/",)) -> None:
 
 
 def test_own_dependabot_config():
-    # The repo's own Actions live in "/" and the generated ones in "/template".
+    # The repo's own Actions live in "/" and the generated ones in "/template/.github/workflows".
     _assert_dependabot_config(
-        TEMPLATE_ROOT / ".github" / "dependabot.yml", ("/", "/template")
+        TEMPLATE_ROOT / ".github" / "dependabot.yml",
+        ("/", "/template/.github/workflows"),
     )
 
 
