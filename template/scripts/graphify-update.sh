@@ -15,6 +15,11 @@
 # project's pinned version.
 export GRAPHIFY_NO_AUTO_REFRESH=1
 
+# Work from the worktree root, whatever the caller's directory (kept as is
+# outside a git repository).
+self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+root=$(git rev-parse --show-toplevel 2>/dev/null) && cd "$root"
+
 out=graphify-out
 lock=$out/.lock
 dirty=$out/.dirty
@@ -31,12 +36,20 @@ trim_log() {
     fi
 }
 
-# Take the lock, clearing it first when its holder is dead or it is too old.
+# Remove the lock only if this process still owns it.
+release() {
+    [ "$(cat "$lock/pid" 2>/dev/null)" = "$$" ] && rm -rf "$lock"
+    return 0
+}
+
+# Take the lock. It is stale if its holder is dead, or if it has no pid file
+# and has not been touched for a while. A live holder is never robbed.
 acquire() {
     mkdir "$lock" 2>/dev/null && { echo $$ >"$lock/pid"; return 0; }
     pid=$(cat "$lock/pid" 2>/dev/null)
     if { [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; } ||
-        [ -n "$(find "$lock" -maxdepth 0 -mmin +"$stale_minutes" 2>/dev/null)" ]; then
+        { [ -z "$pid" ] &&
+            [ -n "$(find "$lock" -maxdepth 0 -mmin +"$stale_minutes" 2>/dev/null)" ]; }; then
         say "removing stale lock (holder ${pid:-unknown})"
         rm -rf "$lock"
         mkdir "$lock" 2>/dev/null && { echo $$ >"$lock/pid"; return 0; }
@@ -46,8 +59,9 @@ acquire() {
 
 worker() {
     while acquire; do
-        trap 'rm -rf "$lock"' EXIT
+        trap release EXIT
         while [ -f "$dirty" ]; do
+            touch "$lock" 2>/dev/null
             rm -f "$dirty"
             say "update start"
             if uv run --frozen graphify update . >>"$log" 2>&1; then
@@ -57,7 +71,7 @@ worker() {
             fi
             trim_log
         done
-        rm -rf "$lock"
+        release
         trap - EXIT
         # A trigger may have arrived between the last check and the release.
         [ -f "$dirty" ] || return 0
@@ -81,8 +95,8 @@ touch "$dirty"
 if [ -n "$GRAPHIFY_UPDATE_FOREGROUND" ]; then
     worker
 elif command -v setsid >/dev/null 2>&1; then
-    setsid sh "$0" --worker >/dev/null 2>&1 </dev/null &
+    setsid sh "$self" --worker >/dev/null 2>&1 </dev/null &
 else
-    nohup sh "$0" --worker >/dev/null 2>&1 </dev/null &
+    nohup sh "$self" --worker >/dev/null 2>&1 </dev/null &
 fi
 exit 0

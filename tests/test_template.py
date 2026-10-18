@@ -12,6 +12,7 @@ import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
+import plumbum
 import pytest
 import yaml
 
@@ -591,6 +592,51 @@ def test_graphify_script_recovers_stale_lock(project, tmp_path):
         check=True,
     )
     assert (tmp_path / "builds.txt").read_text().count("x") == 1
+
+
+def test_graphify_script_does_not_steal_live_lock(project, tmp_path):
+    """A live holder keeps its lock even when the lock directory is old."""
+    (tmp_path / "uv.lock").write_text("")
+    lock = tmp_path / "graphify-out" / ".lock"
+    lock.mkdir(parents=True)
+    holder = subprocess.Popen(["sleep", "30"])
+    try:
+        (lock / "pid").write_text(str(holder.pid))
+        old = time.time() - 3600
+        os.utime(lock, (old, old))
+        env = _fake_uv(tmp_path / "bin", f"echo x >> {tmp_path / 'builds.txt'}")
+        subprocess.run(
+            ["sh", _script(project.path)],
+            cwd=tmp_path,
+            env={**env, "GRAPHIFY_UPDATE_FOREGROUND": "1"},
+            check=True,
+        )
+        assert not (tmp_path / "builds.txt").exists()
+        assert (lock / "pid").read_text() == str(holder.pid)
+    finally:
+        holder.kill()
+        holder.wait()
+
+
+def test_generation_survives_without_uv(tmp_path):
+    """The best-effort `uv lock` task must not abort project generation."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    for tool in ("git", "sh"):
+        (bin_dir / tool).symlink_to(shutil.which(tool))
+    dst = tmp_path / "proj"
+    # copier runs tasks with plumbum's environment, not os.environ.
+    with plumbum.local.env(PATH=str(bin_dir)):
+        copier.run_copy(
+            src_path=str(TEMPLATE_ROOT),
+            dst_path=str(dst),
+            data={**COPIER_DATA, "include_hexagonal": False},
+            defaults=True,
+            unsafe=True,
+            vcs_ref="HEAD",
+        )
+    assert (dst / "pyproject.toml").is_file()
+    assert not (dst / "uv.lock").exists()
 
 
 def _online() -> bool:
