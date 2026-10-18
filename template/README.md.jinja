@@ -32,7 +32,7 @@ pip install {{ project_slug | replace('_', '-') }}
 
 ```bash
 uv sync
-uv run pre-commit install
+uv run pre-commit install  # also installs the post-* hooks that keep graphify-out/ current
 ```
 
 ## Running tests

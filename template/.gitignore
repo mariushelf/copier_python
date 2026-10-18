@@ -153,6 +153,9 @@ data/**
 poetry.lock
 .isort.cfg
 
+# graphify code graph (rebuilt by git hooks)
+graphify-out/
+
 # Claude code artifacts
 **/.claude/settings.local.json
 

@@ -1,7 +1,10 @@
 """Integration tests for the copier template."""
 
+import os
 import re
+import shutil
 import subprocess
+import time
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
@@ -438,3 +441,144 @@ def test_invalid_project_slug_is_rejected(tmp_path):
             unsafe=True,
             vcs_ref="HEAD",
         )
+
+
+# --- graphify -------------------------------------------------------------
+
+GRAPHIFY_STAGES = ["post-commit", "post-checkout", "post-merge", "post-rewrite"]
+
+
+def _graphify_hook(project_path: Path) -> dict:
+    config = yaml.safe_load(
+        (project_path / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    hooks = [h for r in config["repos"] for h in r["hooks"] if h["id"] == "graphify"]
+    assert len(hooks) == 1
+    return hooks[0]
+
+
+def test_graphify_is_configured(project):
+    """The rendered project wires graphify into pre-commit, deps and docs."""
+    config = yaml.safe_load(
+        (project.path / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    assert set(config["default_install_hook_types"]) == {"pre-commit", *GRAPHIFY_STAGES}
+
+    hook = _graphify_hook(project.path)
+    assert hook["stages"] == GRAPHIFY_STAGES
+    assert hook["always_run"] is True
+    assert hook["pass_filenames"] is False
+    assert hook["language"] == "system"
+
+    script = project.path / "scripts" / "graphify-update.sh"
+    assert script.stat().st_mode & 0o111, "hook script must be executable"
+    body = script.read_text(encoding="utf-8")
+    assert "GRAPHIFY_NO_AUTO_REFRESH=1" in body
+    assert "uv run --frozen graphify update ." in body
+
+    pyproject = tomllib.loads((project.path / "pyproject.toml").read_text("utf-8"))
+    assert any(
+        d.startswith("graphifyy>=") for d in pyproject["dependency-groups"]["dev"]
+    )
+    gitignore = (project.path / ".gitignore").read_text(encoding="utf-8")
+    assert "graphify-out/" in gitignore.splitlines()
+    assert not (project.path / ".gitattributes").exists()
+    agents = (project.path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "## Code Graph" in agents
+    assert "graphify query" in agents
+
+
+def test_graphify_script_exits_zero_without_tools(project, tmp_path):
+    """With neither uv nor graphify on PATH the script is a silent no-op."""
+    sh = shutil.which("sh")
+    result = subprocess.run(
+        [sh, str(project.path / "scripts" / "graphify-update.sh")],
+        cwd=tmp_path,
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert not (tmp_path / "graphify-out").exists()
+
+
+def test_graphify_script_exits_zero_when_graphify_fails(project, tmp_path):
+    """A failing `uv run` must not surface as a failing git operation."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_uv = bin_dir / "uv"
+    fake_uv.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    fake_uv.chmod(0o755)
+    result = subprocess.run(
+        ["sh", str(project.path / "scripts" / "graphify-update.sh")],
+        cwd=tmp_path,
+        env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+
+
+def _wait_for(path: Path, timeout: float = 90.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            return True
+        time.sleep(1)
+    return path.is_file()
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv not available")
+def test_graphify_hooks_build_graph_per_worktree(tmp_path):
+    """Commit and `git worktree add` each produce their own graphify-out/.
+
+    Needs network access (installs pre-commit hook environments and graphify).
+    Exercises the real post-commit and post-checkout hooks end to end.
+    """
+    dst = tmp_path / "proj"
+    copier.run_copy(
+        src_path=str(TEMPLATE_ROOT),
+        dst_path=str(dst),
+        data={**COPIER_DATA, "include_hexagonal": False},
+        defaults=True,
+        unsafe=True,
+        vcs_ref="HEAD",
+    )
+
+    def run(*cmd, cwd=dst):
+        return subprocess.run(
+            cmd, cwd=cwd, check=True, capture_output=True, text=True
+        )
+
+    run("uv", "sync")
+    run("git", "config", "user.email", "t@example.com")
+    run("git", "config", "user.name", "T")
+    # Hook environments are installed lazily; the graphify hook is `system`.
+    run("uvx", "pre-commit", "install")
+    hooks = dst / ".git" / "hooks"
+    for name in ["post-commit", "post-checkout", "post-merge", "post-rewrite"]:
+        assert (hooks / name).is_file(), f"{name} hook not installed"
+    # `uvx pre-commit` runs the hooks with uv on PATH but not pre-commit
+    # itself; the installed shims call `pre-commit`, so expose it.
+    shim_dir = tmp_path / "shims"
+    shim_dir.mkdir()
+    pre_commit = shim_dir / "pre-commit"
+    pre_commit.write_text('#!/bin/sh\nexec uvx pre-commit "$@"\n', encoding="utf-8")
+    pre_commit.chmod(0o755)
+    env = {**os.environ, "PATH": f"{shim_dir}:{os.environ['PATH']}"}
+
+    def git(*args, cwd=dst):
+        return subprocess.run(
+            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True, env=env
+        )
+
+    git("add", ".")
+    git("commit", "--no-verify", "-m", "chore: initial")
+    # --no-verify skips pre-commit/commit-msg only; post-commit still fires.
+    assert _wait_for(dst / "graphify-out" / "graph.json"), "post-commit built no graph"
+
+    worktree = tmp_path / "wt"
+    git("worktree", "add", "-b", "other", str(worktree))
+    assert _wait_for(worktree / "graphify-out" / "graph.json"), (
+        "post-checkout did not build a graph in the new worktree"
+    )
