@@ -8,7 +8,10 @@ updates:
     cooldown:
       default-days: 7
   - package-ecosystem: github-actions
-    directory: "/"
+    # "/template" holds the workflows that generated projects receive.
+    directories:
+      - "/"
+      - "/template"
     schedule:
       interval: weekly
     cooldown:
