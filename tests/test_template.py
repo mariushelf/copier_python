@@ -421,6 +421,25 @@ def test_ci_workflow_triggers(workflow_path):
     assert "pull_request" in triggers
 
 
+def _assert_dependabot_config(path: Path) -> None:
+    config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert config["version"] == 2
+    updates = {u["package-ecosystem"]: u for u in config["updates"]}
+    assert set(updates) == {"uv", "github-actions"}
+    for update in updates.values():
+        assert update["directory"] == "/"
+        assert update["schedule"]["interval"] == "weekly"
+        assert update["cooldown"]["default-days"] == 7
+
+
+def test_own_dependabot_config():
+    _assert_dependabot_config(TEMPLATE_ROOT / ".github" / "dependabot.yml")
+
+
+def test_generated_dependabot_config(project):
+    _assert_dependabot_config(project.path / ".github" / "dependabot.yml")
+
+
 def test_invalid_project_slug_is_rejected(tmp_path):
     """An explicitly supplied invalid project_slug must fail validation.
 
