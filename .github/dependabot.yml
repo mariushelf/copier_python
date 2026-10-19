@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Wait a week before proposing a new release. Security updates ignore this.
+    cooldown:
+      default-days: 7
+  - package-ecosystem: github-actions
+    # "/template/.github/workflows" holds the workflows that generated projects receive.
+    directories:
+      - "/"
+      - "/template/.github/workflows"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

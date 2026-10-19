@@ -421,6 +421,31 @@ def test_ci_workflow_triggers(workflow_path):
     assert "pull_request" in triggers
 
 
+def _assert_dependabot_config(path: Path, actions_dirs=("/",)) -> None:
+    config = yaml.safe_load(path.read_text(encoding="utf-8"))
+    assert config["version"] == 2
+    updates = {u["package-ecosystem"]: u for u in config["updates"]}
+    assert set(updates) == {"uv", "github-actions"}
+    for update in updates.values():
+        dirs = update.get("directories") or [update["directory"]]
+        expected = actions_dirs if update["package-ecosystem"] == "github-actions" else ("/",)
+        assert dirs == list(expected)
+        assert update["schedule"]["interval"] == "weekly"
+        assert update["cooldown"]["default-days"] == 7
+
+
+def test_own_dependabot_config():
+    # The repo's own Actions live in "/" and the generated ones in "/template/.github/workflows".
+    _assert_dependabot_config(
+        TEMPLATE_ROOT / ".github" / "dependabot.yml",
+        ("/", "/template/.github/workflows"),
+    )
+
+
+def test_generated_dependabot_config(project):
+    _assert_dependabot_config(project.path / ".github" / "dependabot.yml")
+
+
 def test_invalid_project_slug_is_rejected(tmp_path):
     """An explicitly supplied invalid project_slug must fail validation.
 
