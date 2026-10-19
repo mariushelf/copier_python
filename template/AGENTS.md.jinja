@@ -71,6 +71,21 @@ those blocks once you start modelling your own domain.
 - `make lint` runs ruff and the `ty` type checker.
 {%- endif %}
 
+## Code Graph
+
+The graph in `graphify-out/` is rebuilt by git hooks after commit, checkout,
+merge, and rebase. It is AST only and can lag a moment behind. Each worktree
+has its own graph, and it is not committed.
+
+- Query it before broad searches: `graphify query "<question>"`,
+  `graphify explain "<node>"`, `graphify path "A" "B"`, and
+  `graphify-out/GRAPH_REPORT.md` for an overview.
+- `uv run pre-commit install --allow-missing-config` installs all hook types,
+  including these. The flag keeps checkouts of old commits without a config
+  working.
+- If the graph is missing, run `sh scripts/graphify-update.sh`. Do not call
+  `graphify update .` directly: it overwrites the global graphify skill files.
+
 ## Documentation and Comment Style
 
 Brevity is not tidiness — it is what gets the text read. A docstring, comment,

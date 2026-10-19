@@ -10,6 +10,8 @@ _exclude:
 
 _tasks:
   - "git init"
+  # Best effort: offline or without uv the project must still be generated.
+  - "sh -c 'uv lock || echo \"uv lock failed; run it later to enable the code graph\"'"
   - "git checkout -b main"
 
 # Questions

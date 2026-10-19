@@ -94,9 +94,11 @@ type = "github"
 
 [dependency-groups]
 dev = [
+    "graphifyy>=0.9.92",
 {%- if include_hexagonal %}
     "import-linter>=2.0",
 {%- endif %}
+    "pre-commit>=3.2",
     "pytest>=8.0",
     "ruff>=0.15",
     "ty>=0.0.17",

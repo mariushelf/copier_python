@@ -1,11 +1,18 @@
 """Integration tests for the copier template."""
 
+import contextlib
+import os
 import re
+import shutil
+import signal
+import socket
 import subprocess
+import time
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
 
+import plumbum
 import pytest
 import yaml
 
@@ -463,3 +470,275 @@ def test_invalid_project_slug_is_rejected(tmp_path):
             unsafe=True,
             vcs_ref="HEAD",
         )
+
+
+# --- graphify -------------------------------------------------------------
+
+GRAPHIFY_STAGES = ["post-commit", "post-checkout", "post-merge", "post-rewrite"]
+
+
+def _graphify_hook(project_path: Path) -> dict:
+    config = yaml.safe_load(
+        (project_path / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    hooks = [h for r in config["repos"] for h in r["hooks"] if h["id"] == "graphify"]
+    assert len(hooks) == 1
+    return hooks[0]
+
+
+def test_graphify_is_configured(project):
+    """The rendered project wires graphify into pre-commit, deps and docs."""
+    config = yaml.safe_load(
+        (project.path / ".pre-commit-config.yaml").read_text(encoding="utf-8")
+    )
+    assert set(config["default_install_hook_types"]) == {"pre-commit", *GRAPHIFY_STAGES}
+
+    assert config["default_stages"] == ["pre-commit"]
+
+    hook = _graphify_hook(project.path)
+    assert hook["stages"] == GRAPHIFY_STAGES
+    assert hook["always_run"] is True
+    assert hook["pass_filenames"] is False
+    assert hook["language"] == "system"
+
+    script = project.path / "scripts" / "graphify-update.sh"
+    assert script.stat().st_mode & 0o111, "hook script must be executable"
+    body = script.read_text(encoding="utf-8")
+    assert "GRAPHIFY_NO_AUTO_REFRESH=1" in body
+    assert "uv run --frozen graphify update ." in body
+
+    pyproject = tomllib.loads((project.path / "pyproject.toml").read_text("utf-8"))
+    assert any(
+        d.startswith("graphifyy>=") for d in pyproject["dependency-groups"]["dev"]
+    )
+    gitignore = (project.path / ".gitignore").read_text(encoding="utf-8")
+    assert "graphify-out/" in gitignore.splitlines()
+    assert not (project.path / ".gitattributes").exists()
+    agents = (project.path / "AGENTS.md").read_text(encoding="utf-8")
+    assert "## Code Graph" in agents
+    assert "graphify query" in agents
+
+
+def _script(project_path: Path) -> str:
+    return str(project_path / "scripts" / "graphify-update.sh")
+
+
+def _fake_uv(bin_dir: Path, body: str) -> dict:
+    bin_dir.mkdir(exist_ok=True)
+    fake = bin_dir / "uv"
+    fake.write_text(f"#!/bin/sh\n{body}\n", encoding="utf-8")
+    fake.chmod(0o755)
+    return {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+
+def test_graphify_script_exits_zero_without_tools(project, tmp_path):
+    """With neither uv nor graphify on PATH the script is a silent no-op."""
+    result = subprocess.run(
+        [shutil.which("sh"), _script(project.path)],
+        cwd=tmp_path,
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert not (tmp_path / "graphify-out").exists()
+
+
+def test_graphify_script_skips_without_lockfile(project, tmp_path):
+    """No uv.lock: log why, exit 0, and do not create a lock."""
+    env = _fake_uv(tmp_path / "bin", "echo built >> built.txt")
+    result = subprocess.run(
+        ["sh", _script(project.path)],
+        cwd=tmp_path,
+        env={**env, "GRAPHIFY_UPDATE_FOREGROUND": "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "no uv.lock" in (tmp_path / "graphify-out" / "update.log").read_text()
+    assert not (tmp_path / "uv.lock").exists()
+    assert not (tmp_path / "built.txt").exists()
+
+
+def test_graphify_script_survives_failing_build(project, tmp_path):
+    """A failing build is logged and still exits 0, releasing the lock."""
+    (tmp_path / "uv.lock").write_text("")
+    env = _fake_uv(tmp_path / "bin", "echo boom; exit 3")
+    result = subprocess.run(
+        ["sh", _script(project.path)],
+        cwd=tmp_path,
+        env={**env, "GRAPHIFY_UPDATE_FOREGROUND": "1"},
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    log = (tmp_path / "graphify-out" / "update.log").read_text()
+    assert "boom" in log
+    assert "update failed" in log
+    assert not (tmp_path / "graphify-out" / ".lock").exists()
+
+
+def test_graphify_script_coalesces_triggers(project, tmp_path):
+    """A trigger during a running build makes the holder build once more."""
+    (tmp_path / "uv.lock").write_text("")
+    counter = tmp_path / "builds.txt"
+    env = {
+        **_fake_uv(tmp_path / "bin", f"echo x >> {counter}; sleep 2"),
+        "GRAPHIFY_UPDATE_FOREGROUND": "1",
+    }
+    first = subprocess.Popen(
+        ["sh", _script(project.path)], cwd=tmp_path, env=env
+    )
+    deadline = time.monotonic() + 30
+    while not counter.exists() and time.monotonic() < deadline:
+        time.sleep(0.1)
+    # Second and third triggers arrive mid-build: no extra parallel build.
+    for _ in range(2):
+        second = subprocess.run(["sh", _script(project.path)], cwd=tmp_path, env=env)
+        assert second.returncode == 0
+    assert first.wait(timeout=60) == 0
+    assert counter.read_text().count("x") == 2
+    assert not (tmp_path / "graphify-out" / ".lock").exists()
+
+
+def test_graphify_script_recovers_stale_lock(project, tmp_path):
+    """A lock whose holder is dead does not block builds forever."""
+    (tmp_path / "uv.lock").write_text("")
+    lock = tmp_path / "graphify-out" / ".lock"
+    lock.mkdir(parents=True)
+    dead = subprocess.Popen(["true"])
+    dead.wait()
+    (lock / "pid").write_text(str(dead.pid))
+    env = _fake_uv(tmp_path / "bin", f"echo x >> {tmp_path / 'builds.txt'}")
+    subprocess.run(
+        ["sh", _script(project.path)],
+        cwd=tmp_path,
+        env={**env, "GRAPHIFY_UPDATE_FOREGROUND": "1"},
+        check=True,
+    )
+    assert (tmp_path / "builds.txt").read_text().count("x") == 1
+
+
+def test_graphify_script_does_not_steal_live_lock(project, tmp_path):
+    """A live holder keeps its lock even when the lock directory is old."""
+    (tmp_path / "uv.lock").write_text("")
+    lock = tmp_path / "graphify-out" / ".lock"
+    lock.mkdir(parents=True)
+    holder = subprocess.Popen(["sleep", "30"])
+    try:
+        (lock / "pid").write_text(str(holder.pid))
+        old = time.time() - 3600
+        os.utime(lock, (old, old))
+        env = _fake_uv(tmp_path / "bin", f"echo x >> {tmp_path / 'builds.txt'}")
+        subprocess.run(
+            ["sh", _script(project.path)],
+            cwd=tmp_path,
+            env={**env, "GRAPHIFY_UPDATE_FOREGROUND": "1"},
+            check=True,
+        )
+        assert not (tmp_path / "builds.txt").exists()
+        assert (lock / "pid").read_text() == str(holder.pid)
+    finally:
+        holder.kill()
+        holder.wait()
+
+
+def test_generation_survives_failing_uv_lock(tmp_path):
+    """The best-effort `uv lock` task must not abort project generation."""
+    env = _fake_uv(tmp_path / "bin", "echo offline >&2; exit 2")
+    dst = tmp_path / "proj"
+    # copier runs tasks with plumbum's environment, not os.environ.
+    with plumbum.local.env(PATH=env["PATH"]):
+        copier.run_copy(
+            src_path=str(TEMPLATE_ROOT),
+            dst_path=str(dst),
+            data={**COPIER_DATA, "include_hexagonal": False},
+            defaults=True,
+            unsafe=True,
+            vcs_ref="HEAD",
+        )
+    assert (dst / "pyproject.toml").is_file()
+    assert not (dst / "uv.lock").exists()
+
+
+def _online() -> bool:
+    try:
+        socket.create_connection(("pypi.org", 443), timeout=5).close()
+    except OSError:
+        return False
+    return True
+
+
+def _wait_for(path: Path, timeout: float = 90.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if path.is_file():
+            return True
+        time.sleep(1)
+    return path.is_file()
+
+
+def _wait_idle(*roots: Path, timeout: float = 60.0) -> None:
+    """Wait for background builds to finish so tmp_path can be removed."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if not any((r / "graphify-out" / ".lock").exists() for r in roots):
+            return
+        time.sleep(1)
+    for r in roots:
+        pid_file = r / "graphify-out" / ".lock" / "pid"
+        if pid_file.exists():
+            with contextlib.suppress(OSError, ValueError):
+                os.kill(int(pid_file.read_text()), signal.SIGTERM)
+
+
+@pytest.mark.skipif(shutil.which("uv") is None, reason="uv not available")
+@pytest.mark.skipif(not _online(), reason="network not available")
+def test_graphify_hooks_build_graph_per_worktree(tmp_path):
+    """Commit and `git worktree add` each produce their own graphify-out/.
+
+    Needs network access (installs the project's dev dependencies, graphify
+    included). Exercises the real post-commit and post-checkout hooks, and that
+    a checkout of a commit without a pre-commit config still succeeds.
+    """
+    dst = tmp_path / "proj"
+    worktree = tmp_path / "wt"
+    copier.run_copy(
+        src_path=str(TEMPLATE_ROOT),
+        dst_path=str(dst),
+        data={**COPIER_DATA, "include_hexagonal": False},
+        defaults=True,
+        unsafe=True,
+        vcs_ref="HEAD",
+    )
+    assert (dst / "uv.lock").is_file(), "copier _tasks should create uv.lock"
+
+    def run(*cmd, cwd=dst):
+        return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+
+    try:
+        run("uv", "sync")
+        run("git", "config", "user.email", "t@example.com")
+        run("git", "config", "user.name", "T")
+        run("uv", "run", "pre-commit", "install", "--allow-missing-config")
+        for name in ["post-commit", "post-checkout", "post-merge", "post-rewrite"]:
+            assert (dst / ".git" / "hooks" / name).is_file(), f"{name} not installed"
+
+        run("git", "add", ".")
+        # --no-verify skips the pre-commit stage only; post-commit still fires.
+        run("git", "commit", "--no-verify", "-m", "chore: initial")
+        assert _wait_for(dst / "graphify-out" / "graph.json"), "no graph after commit"
+
+        run("git", "worktree", "add", "-b", "other", str(worktree))
+        assert _wait_for(worktree / "graphify-out" / "graph.json"), (
+            "post-checkout did not build a graph in the new worktree"
+        )
+
+        # A commit without .pre-commit-config.yaml must stay checkout-able.
+        run("git", "checkout", "-q", "--orphan", "bare")
+        run("git", "rm", "-rfq", ".")
+        run("git", "commit", "-q", "--allow-empty", "--no-verify", "-m", "bare")
+        run("git", "checkout", "-q", "main")
+        run("git", "checkout", "-q", "bare")
+    finally:
+        _wait_idle(dst, worktree)
