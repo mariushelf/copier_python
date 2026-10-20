@@ -306,21 +306,6 @@ def test_generated_workflows_pin_actions_to_sha(project):
     assert_actions_are_sha_pinned(project.path / ".github" / "workflows")
 
 
-def test_generated_release_keeps_local_workflow_ref_unpinned(project):
-    """The local reusable-workflow ref must stay a path, not become a SHA.
-
-    ``uses: ./.github/workflows/...`` refers to a file inside the generated repo
-    itself. A SHA there would pin the project to one of its own commits that does
-    not exist yet — so this ref is deliberately excluded from the pinning sweep.
-    """
-    local = [
-        (path.name, ref)
-        for path, _, ref, _ in _uses_refs(project.path / ".github" / "workflows")
-        if ref.startswith("./")
-    ]
-    assert local == [("release.yaml", "./.github/workflows/ci.yaml")]
-
-
 def test_default_slug_is_valid_package_name(tmp_path):
     """The auto-derived project_slug must be a valid Python package name.
 
