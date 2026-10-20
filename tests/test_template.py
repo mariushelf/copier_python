@@ -437,8 +437,10 @@ def _assert_dependabot_config(path: Path, actions_dirs=("/",)) -> None:
         dirs = update.get("directories") or [update["directory"]]
         expected = actions_dirs if update["package-ecosystem"] == "github-actions" else ("/",)
         assert dirs == list(expected)
-        assert update["schedule"]["interval"] == "weekly"
+        assert update["schedule"]["interval"] == "monthly"
         assert update["cooldown"]["default-days"] == 7
+        group = update["groups"][update["package-ecosystem"]]
+        assert group == {"patterns": ["*"], "update-types": ["minor", "patch"]}
 
 
 def test_own_dependabot_config():
